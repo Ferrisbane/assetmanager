@@ -2,7 +2,9 @@
 
 namespace Ferrisbane\AssetManager\Facades;
 
-class AssetManager
+use Illuminate\Support\Facades\Facade;
+
+class AssetManager extends Facade
 {
     /**
      * Get the registered name of the component.

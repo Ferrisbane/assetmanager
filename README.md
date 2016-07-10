@@ -17,13 +17,15 @@ To install through composer you can either use `composer require ferrisbane/asse
 Then run either `composer install` or `composer update` to download the package.
 
 Once installed add this to your routes file
+
 ```php
-	Route::get('/asset/{fileHash}.{fileType}', [
+	Route::get('/asset/{fileHash}', [
 		'as' => 'assetmanager.asset',
-		function($fileHash, $fileType) {
+		function($fileHash) {
 			if (Cache::has($fileHash)) {
-				$response = Response::make(Cache::get($fileHash)['file']);
-			    $response->header('Content-Type', 'text/'.$fileType);
+				$file = Cache::get($fileHash);
+				$response = Response::make($file['file']);
+			    $response->header('Content-Type', $file['contentType']);
 
 			    return $response;
 			}

@@ -7,6 +7,7 @@ use Exception;
 use Response;
 use GuzzleHttp;
 use Cache;
+use Carbon\Carbon;
 
 class AssetManager implements AssetManagerContract
 {
@@ -37,8 +38,8 @@ class AssetManager implements AssetManagerContract
 
             if ($this->config['external']['catch']) {
 
-                Cache::forget(md5($path));
-                $file = Cache::remember(md5($path), $this->config['external']['catchminutes'], function() use($path)
+                // Cache::forget(md5($path));
+                $file = Cache::remember(md5($path), $this->config['external']['catch_minutes'], function() use($path)
                 {
                     $fileData = $this->downloadFile($path);
 
@@ -53,19 +54,17 @@ class AssetManager implements AssetManagerContract
                     }
                 });
 
-                return $this->getRoute(route('assetmanager.asset', [
-                    $file['pathHash'],
-                    $file['contentType']
-                ]), $file['fileHash']);
-
             } else {
-                return $this->downloadFile($path);
+                $file = $this->downloadFile($path);
             }
 
-            return $path;
+            return $this->getRoute(route('assetmanager.asset', [
+                $file['pathHash']
+            ]), $file['fileHash']);
         }
 
-        return $path;
+
+        return $this->getRoute($path);
     }
 
     public function downloadFile($url)
@@ -76,35 +75,44 @@ class AssetManager implements AssetManagerContract
 
         if ($request->getStatusCode() == 200) {
             $stream = $request->getBody();
-
             $contentType = $request->getHeader('content-type')[0];
-            $contentType = explode('/', $contentType)[1];
-            $test = explode('; ', $contentType);
-
-            if ( ! empty($test)) {
-                $contentType = $test[0];
-            }
-
-            // preg_match_all('/(?<=(text\/))(\w*)/', $test, $contentType);
 
             return [
-                'file' => $stream->getContents(),
+                'file' => '/** Downloaded on '. Carbon::now() .' **/ ' . $stream->getContents(),
                 'contentType' => $contentType
             ];
         }
 
         return null;
-        /*,
-        [
-            'headers' => ['key'=>'value'],
-            'query'   => ['param'=>'value'],
-            'auth'    => ['username', 'password'],
-            'save_to' => '/path/to/local.file',
-        ]);*/
     }
 
     public function getRoute($path, $version = false)
     {
+        $bestMatch = false;
+        foreach ($this->config['version_overrides'] as $match => $versionNumber) {
+            if (strpos($match, '*')) {
+                $regexArray = explode('!\e/!', str_replace(['/','.'], '!\e/!', $match));
+                $pathArray = explode('!\e/!', str_replace(['/','.'], '!\e/!', $path));
+
+                foreach ($regexArray as $key => $part) {
+                    if ($part != $pathArray[$key] && $part != '*') {
+                        break;
+                    } elseif ($part == '*') {
+                        $matchLength = count($regexArray);
+                        if ($bestMatch < $matchLength) {
+                            $bestMatch = $matchLength;
+                            $version = $versionNumber;
+                        }
+                    }
+                }
+            } else {
+                if ($path == $match) {
+                    $version = $versionNumber;
+                    break;
+                }
+            }
+        }
+
         if ($version) {
             $path .= '?v='.$version;
         }
