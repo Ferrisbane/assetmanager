@@ -35,6 +35,10 @@ class AssetManagerServiceProvider extends ServiceProvider
         });
 
         $this->app->alias('Ferrisbane\AssetManager\Contracts\AssetManager', 'assetmanager');
+
+        $this->app['router']->group(['namespace' => 'Ferrisbane\AssetManager\Controllers'], function () {
+            require __DIR__.'/routes.php';
+        });
     }
 
     /**

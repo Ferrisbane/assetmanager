@@ -38,21 +38,30 @@ class AssetManager implements AssetManagerContract
 
             if ($this->config['external']['catch']) {
 
-                // Cache::forget(md5($path));
-                $file = Cache::remember(md5($path), $this->config['external']['catch_minutes'], function() use($path)
+//                Cache::forget(md5($path));
+                $file = Cache::rememberForever(md5($path), function() use($path)
                 {
                     $fileData = $this->downloadFile($path);
 
                     if ($fileData) {
-                        return [
-                            'file' => $fileData['file'],
-                            'fileHash' => md5($fileData['file']),
-                            'contentType' => $fileData['contentType'],
-                            'path' => $path,
-                            'pathHash' => md5($path)
-                        ];
+                        return array_merge($fileData, ['expireAt' => Carbon::now()->addSeconds($this->config['external']['catch_minutes'])]);
                     }
                 });
+
+                if ( ! $file) {
+                    return false;
+                }
+
+                // If the file has expired try to download file again or return old file
+                if (Carbon::now()->gte($file['expireAt'])) {
+                    $fileData = $this->downloadFile($path);
+
+                    if ($fileData) {
+                        $file = array_merge($fileData, ['expireAt' => Carbon::now()->addSeconds($this->config['external']['catch_minutes'])]);
+
+                        Cache::forever(md5($path), $file);
+                    }
+                }
 
             } else {
                 $file = $this->downloadFile($path);
@@ -69,21 +78,46 @@ class AssetManager implements AssetManagerContract
 
     public function downloadFile($url)
     {
-        $client = new GuzzleHttp\Client();
+        try {
+            $client = new GuzzleHttp\Client();
 
-        $request = $client->get($url, ['stream' => true]);
+            $request = $client->get($url, ['stream' => true]);
 
-        if ($request->getStatusCode() == 200) {
-            $stream = $request->getBody();
-            $contentType = $request->getHeader('content-type')[0];
+            if ($request->getStatusCode() == 200) {
+                $stream = $request->getBody();
+                $contentType = $request->getHeader('content-type')[0];
 
-            return [
-                'file' => '/** Downloaded on '. Carbon::now() .' **/ ' . $stream->getContents(),
-                'contentType' => $contentType
-            ];
+                $file = $stream->getContents();
+                $now = Carbon::now();
+
+                if ($this->config['external']['add_header']) {
+                    $content = '/** Downloaded on '. $now .' **/'. $file;
+                } else {
+                    $content = $file;
+                }
+
+                return [
+                    'file' => $content,
+                    'contentLength' => strlen($content),
+                    'contentType' => $contentType,
+                    'lastModified' => $now,
+                    'fileHash' => md5($file),
+                    'path' => $url,
+                    'pathHash' => md5($url)
+                ];
+            }
+        } catch (Exception $e) {
+            return false;
         }
 
-        return null;
+        return false;
+    }
+
+    public function setConfig($key, $value)
+    {
+        array_set($this->config, $key, $value);
+
+        return $this;
     }
 
     public function getRoute($path, $version = false)

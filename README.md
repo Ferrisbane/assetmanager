@@ -1,6 +1,6 @@
 # Asset Manager
 
-A PHP package that manages assets like css, js etc.
+A PHP package that manages assets like css, js, images, fonts etc..
 
 
 - [Installation](#installation)
@@ -16,21 +16,10 @@ To install through composer you can either use `composer require ferrisbane/asse
 
 Then run either `composer install` or `composer update` to download the package.
 
-Once installed add this to your routes file
+To publish the required config for assetmanager use:
+`php artisan config:publish --path=vendor/ferrisbane/assetmanager/config ferrisbane/assetmanager`
 
-```php
-	Route::get('/asset/{fileHash}', [
-		'as' => 'assetmanager.asset',
-		function($fileHash) {
-			if (Cache::has($fileHash)) {
-				$file = Cache::get($fileHash);
-				$response = Response::make($file['file']);
-			    $response->header('Content-Type', $file['contentType']);
-
-			    return $response;
-			}
-
-			return App::abort(404);
-		}
-	]);
-```
+### Customisation
+The assetmanager config: `config/assetmanager.php` allows you customise the route url of assets.
+Define custom version overrides of assets
+And to enable/disable external asset catching and minutes assets are cached before attempting to reacquire any newer versions of external (any file located outside of the current domain)
