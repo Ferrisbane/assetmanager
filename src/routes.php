@@ -9,11 +9,12 @@
                 $lifetime = 31556926;
 
                 $etag = $file['fileHash'];
+                $fileName = !empty($file['fileName']) ? $file['fileName'] : $file['fileHash'];
                 $lastModified = $file['lastModified']->toRfc2822String();
                 $expires = $file['lastModified']->addYear()->toRfc2822String();
 
                 $headers = [
-                    'Content-Disposition' => 'inline; filename="'. $fileHash .'"',
+                    'Content-Disposition' => 'inline; filename="'. $fileName .'"',
                     'Last-Modified' => $lastModified,
                     'Cache-Control' => 'must-revalidate',
                     'Expires' => $expires,

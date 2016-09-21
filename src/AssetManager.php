@@ -5,6 +5,7 @@ namespace Ferrisbane\AssetManager;
 use Ferrisbane\AssetManager\Contracts\AssetManager as AssetManagerContract;
 use Exception;
 use Response;
+use Storage;
 use GuzzleHttp;
 use Cache;
 use Carbon\Carbon;
@@ -38,7 +39,7 @@ class AssetManager implements AssetManagerContract
 
             if ($this->config['external']['catch']) {
 
-//                Cache::forget(md5($path));
+               // Cache::forget(md5($path));
                 $file = Cache::rememberForever(md5($path), function() use($path)
                 {
                     $fileData = $this->downloadFile($path);
@@ -72,8 +73,65 @@ class AssetManager implements AssetManagerContract
             ]), $file['fileHash']);
         }
 
-
         return $this->getRoute($path);
+    }
+
+    public function storage($path)
+    {
+        if ($this->config['external']['catch']) {
+
+           Cache::forget(md5($path));
+            $file = Cache::rememberForever(md5($path), function() use($path)
+            {
+                $fileData = $this->getFileFromStorage($path);
+
+                if ($fileData) {
+                    return array_merge($fileData, ['expireAt' => Carbon::now()->addSeconds($this->config['external']['catch_minutes'])]);
+                }
+            });
+
+            if ( ! $file) {
+                return false;
+            }
+
+            // If the file has expired try to download file again or return old file
+            if (Carbon::now()->gte($file['expireAt'])) {
+                $fileData = $this->getFileFromStorage($path);
+
+                if ($fileData) {
+                    $file = array_merge($fileData, ['expireAt' => Carbon::now()->addSeconds($this->config['external']['catch_minutes'])]);
+
+                    Cache::forever(md5($path), $file);
+                }
+            }
+        } else {
+            $file = $this->downloadFile($path);
+        }
+
+        return $this->getRoute(route('assetmanager.asset', [
+            $file['pathHash']
+        ]), $file['fileHash']);
+    }
+
+    public function getFileFromStorage($path)
+    {
+        $content = Storage::disk('local')->get($path);
+        $mime = Storage::mimeType($path);
+        $paths = explode('/', $path);
+        $arraySize = sizeof($paths) - 1;
+
+        $now = Carbon::now();
+
+        return [
+            'file' => $content,
+            'contentLength' => strlen($content),
+            'contentType' => $mime,
+            'lastModified' => $now,
+            'fileHash' => md5($content),
+            'fileName' => $paths[$arraySize],
+            'path' => $path,
+            'pathHash' => md5($path)
+        ];
     }
 
     public function downloadFile($url)
